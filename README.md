@@ -1,4 +1,4 @@
-5 channel midi|CV converter
+5 channel CV|midi converter
 ===
 
 
