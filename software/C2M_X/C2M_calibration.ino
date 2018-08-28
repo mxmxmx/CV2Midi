@@ -120,7 +120,7 @@ void C2M::Ui::Calibrate() {
         case CONTROL_BUTTON:
           if (calibration_state.step == HELLO && UI::EVENT_BUTTON_LONG_PRESS == event.type) {
             calibration_reset();
-            SERIAL_PRINTLN("reset to defaults");
+            SERIAL_PRINTLN("resetting calibration data ... ");
             digitalWriteFast(LEDX, HIGH);
             delay(100);
             digitalWriteFast(LEDX, LOW);
@@ -154,28 +154,29 @@ void C2M::Ui::Calibrate() {
           digitalWriteFast(LEDX, LOW);
           break;
         case CV_OFFSET:
-        // turn of lights again
-        for (int i = 0; i < ADC_CHANNEL_NUM; i++)
-          digitalWriteFast(C2M::LEDs::LED_num[i], LOW);
-        digitalWriteFast(C2M::LEDs::LED_num[0], HIGH); 
+        // turn off lights again
+        C2M::LEDs::off();
+        // turn on 1 LED --> 1V
+        C2M::LEDs::on_up_to(1); 
         break;
         case ADC_PITCH_C2:
-        // turn on 3 lights --> 3V
-        for (int i = 0; i < 3; i++)
-          digitalWriteFast(C2M::LEDs::LED_num[i], HIGH);
+        // turn on 3 LEDs --> 3V
+        C2M::LEDs::on_up_to(3);
         break;
         case ADC_PITCH_C4:
+        {
           if (calibration_state.adc_1v && calibration_state.adc_3v) {
+            
             // using the raw values, ie C4 < C2 
             C2M::ADC::CalibratePitch(calibration_state.adc_3v, calibration_state.adc_1v);
             SERIAL_PRINTLN("ADC SCALE 1V=%d, 3V=%d -> %d",
                            calibration_state.adc_1v, calibration_state.adc_3v,
                            C2M::calibration_data.adc.pitch_cv_scale);
-          }// turn off again 3 lights 
-          for (int i = 0; i < 3; i++)
-            digitalWriteFast(C2M::LEDs::LED_num[i], LOW);
+          }
+          // lights off
+          C2M::LEDs::off();
           digitalWriteFast(LEDX, HIGH);
-          // now save calibration data
+          // + save calibration data
           SERIAL_PRINTLN("Calibration complete");
           calibration_save();
           calibration_complete = true;
@@ -193,7 +194,8 @@ void C2M::Ui::Calibrate() {
           delay(100);
           digitalWriteFast(LEDX, LOW);
           C2M::LEDs::BlinkSwitchLED(0x0);
-          break;
+        }
+        break;
         default: break;
       }
 
@@ -201,9 +203,9 @@ void C2M::Ui::Calibrate() {
       switch (next_step->calibration_type) {
       case CALIBRATE_ADC_OFFSET:
         for (int i = 0; i < ADC_CHANNEL_NUM; i++) {
-        C2M::calibration_data.adc.offset[i] = adc_average(static_cast<ADC_CHANNEL>(i)); 
-        C2M::calibration_data.adc.offset[i + ADC_CHANNEL_NUM] = adc_average(static_cast<ADC_CHANNEL>(i + ADC_CHANNEL_NUM));
-        digitalWriteFast(C2M::LEDs::LED_num[i], HIGH);
+          C2M::calibration_data.adc.offset[i] = adc_average(static_cast<ADC_CHANNEL>(i)); 
+          C2M::calibration_data.adc.offset[i + ADC_CHANNEL_NUM] = adc_average(static_cast<ADC_CHANNEL>(i + ADC_CHANNEL_NUM));
+          digitalWriteFast(C2M::LEDs::LED_num[i], HIGH);
         } 
         break;
       case CALIBRATE_ADC_1V:

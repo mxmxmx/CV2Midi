@@ -142,6 +142,7 @@ public:
     trigger_delay_.Update();
     
     if (_triggered) {
+      // to do: use array with more evenly spaced values
       trigger_delay_.Push(get_trigger_delay() << 0x4);
     }
     _triggered = trigger_delay_.triggered();
@@ -175,7 +176,6 @@ public:
           cm_sample = get_default_velocity(); // velocity
         break;
         */
-        /* to do ... dump channel configurations into module w/ sysex ? */
         default: break;
       }
       // send note on
@@ -371,6 +371,7 @@ public:
           ui.save = true;
           break;
           */
+          /* to do ... dump channel configurations into module w/ sysex ? */
           default:
           SERIAL_PRINTLN("(ignored): channel %d, type: %d", MIDI.getChannel(), MIDI.getType());
           break;
@@ -442,7 +443,7 @@ void CV2MIDI_button() {
   switch(c2m_channels.ui.edit_mode) {
     
     case C2M_CHANNEL::MODE_C2M:
-    
+    {
       c2m_channels.ui.edit_mode = C2M_CHANNEL::MODE_LEARN;
       c2m_channels.ui.selected_channel = 0x0;
       c2m_channels.ui.ticks = 0x0;
@@ -457,12 +458,12 @@ void CV2MIDI_button() {
       digitalWriteFast(C2M::LEDs::LED_num[c2m_channels.ui.selected_channel], HIGH);
       // turn on switch LED: 
       digitalWriteFast(LEDX, HIGH);
-      break;
+    }
+    break;
     case C2M_CHANNEL::MODE_LEARN:
     {  
       // double-click hack: 
       if (!c2m_channels.ui.arm) {
-        
         if (c2m_channels.ui.ticks > (DOUBLE_CLICK_TICKS + 0xF)) {
           c2m_channels.ui.pressed = true;
         }
@@ -479,17 +480,19 @@ void CV2MIDI_button() {
       }
       c2m_channels.ui.ticks = 0x0;
     }
-      break;
+    break;
     case C2M_CHANNEL::MODE_SET_TR_DELAY:
-       // choose trigger delay settings:
-       if (c2m_channels.ui.trigger_settings++ >= NUM_CHANNELS)
-          c2m_channels.ui.trigger_settings = 0x0;
-       SERIAL_PRINTLN("trigger delay setting: %u", c2m_channels.ui.trigger_settings);
-       // show settings > 0
-       C2M::LEDs::on_up_to(c2m_channels.ui.trigger_settings);
-       c2m_channels.set_delay_settings(c2m_channels.ui.trigger_settings);
-       c2m_channels.ui.save = true;
-      break;
+    {
+     // choose trigger delay settings:
+     if (c2m_channels.ui.trigger_settings++ >= NUM_CHANNELS)
+      c2m_channels.ui.trigger_settings = 0x0;
+     SERIAL_PRINTLN("trigger delay setting: %u", c2m_channels.ui.trigger_settings);
+     // show settings > 0
+     C2M::LEDs::on_up_to(c2m_channels.ui.trigger_settings);
+     c2m_channels.set_delay_settings(c2m_channels.ui.trigger_settings);
+     c2m_channels.ui.save = true;
+    }
+    break;
     default: break;
   }
 }
@@ -499,6 +502,7 @@ void CV2MIDI_button_long() {
   switch(c2m_channels.ui.edit_mode) {
     
     case C2M_CHANNEL::MODE_C2M:
+    {
       c2m_channels.ui.edit_mode = C2M_CHANNEL::MODE_SET_TR_DELAY;
       // turn off lights:
       C2M::LEDs::off();
@@ -506,8 +510,10 @@ void CV2MIDI_button_long() {
       c2m_channels.ui.trigger_settings = c2m_channels.delay_settings();
       // show settings > 0
       C2M::LEDs::on_up_to(c2m_channels.ui.trigger_settings);
-      break;
+    }
+    break;
     case C2M_CHANNEL::MODE_LEARN:
+    {
       if (!c2m_channels.ui.arm) {
         // exit + save
         if (c2m_channels.ui.save)
@@ -517,15 +523,18 @@ void CV2MIDI_button_long() {
         c2m_channels.ui.edit_mode = C2M_CHANNEL::MODE_C2M;
         C2M::LEDs::off(); 
       }
-      break;
+    }
+    break;
     case C2M_CHANNEL::MODE_SET_TR_DELAY:
+    {
       // exit + save
       if (c2m_channels.ui.save)
         C2M::ui.SaveSettings();
       c2m_channels.ui.save = false;
       c2m_channels.ui.edit_mode = C2M_CHANNEL::MODE_C2M;
       C2M::LEDs::off();
-      break;
+    }
+    break;
     default: break;
   }
 }
