@@ -7,7 +7,7 @@
 | 51R	|	12x	|	|
 | 220R	|	2x |	|
 | 1k	|	1x |	|
-| 10k	|	2x | + 6x (if/when using ultrabright LEDs (recommended))	|
+| 10k	|	2x | + 6x (when using ultrabright LEDs (recommended))	|
 | 33k	|	15x |	|
 | 100k	|	20x |	|
 | 200k	|	5x |	|
@@ -54,7 +54,7 @@
 | --- | ---: | --- |
 | C&K 1P2T SMD SUBMIN | 2x | mouser # 611-AYZ0202AGRLC |
 | switch OFF/(ON) (E-switch)| 1x | mouser # 612-TL1105SP-250 |
-| + cap | 1x | mouser # 612-1R-BK (black) |
+| + cap | 1x | mouser # 612-1R-BK (= black) |
 | PJ398SM (mono 3.5mm) | 15x | thonkiconn / kobiconn |
 | PJ366ST (stereo 3.5mm) | 2x | thonkiconn "green stereo" (or 2.5mm, if you can find one with the same footprint / if you want to comply with the TRS midi spec) |
 | potentiometers ("tall trimmers") | 5x | 10k / 9mm |
@@ -68,4 +68,4 @@
 | 2.54 1x10 socket | 1x | - |
 | 2.54 1x16 socket | 1x | - |
 | M3 spacers (10mm) | 2x | (NB: length will somewhat depend on the headers/sockets) |
-| 2.54 headers/sockets for Teensy (1x14) | 2x each | (the pcbs holes are fairly tight, so preferable use "machined" pins) |
+| 2.54 headers/sockets for Teensy (1x14) | 2x each | (the pcbs holes are fairly tight, so preferably use "machined" pins) |
