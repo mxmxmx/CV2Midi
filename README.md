@@ -12,7 +12,7 @@
 - internally, the module re-utilizes the o_C - version of the MI "braids" quantizer; it tracks V/oct fairly ok.
 - also features configurable trigger-to-SH "delay" (latency) settings (typically helps when re-quantizing control voltages)
 - CV inputs default to note/velocity; alternatively velocity can be mapped to any CC message ("learn").
-- there's a micro USB connector on the back, so in theory there's the option to also have usb-midi (not implemented, and somewhat inconvenient)
+- there's a micro USB connector on the backside of the module, so in theory there's the option to also have usb-midi (not implemented, and somewhat inconvenient)
 
 ### hardware:
 
