@@ -16,7 +16,7 @@
 
 ### hardware:
 
-- trigger/gate in, V/oct, velocity (CV + manual offset) per channel; midi TRS in/out
+- trigger/gate in, V/oct, velocity (CV + manual offset) per channel; midi TRS in/out (type A/B selectable)
 - 15kHz update rate
 - teensy 3.2 based
 - 10HP, depth ~ 35mm
