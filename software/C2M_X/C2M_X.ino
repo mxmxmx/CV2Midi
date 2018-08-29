@@ -52,9 +52,9 @@ volatile uint32_t C2M::CORE::ticks = 0;
 
 void FASTRUN CORE_timer_ISR() {
 
-  // The ADC scan uses async startSingleRead/readSingle and single channel each
-  // loop. Effectively, the scan rate is ISR / 10 / ADC::kAdcSmoothing
-  C2M::ADC::Scan();
+  // we sequence the ADC pins using DMA. 
+  // with kAdcScanAverages = 4 and kAdcScanResolution = 16, there's a new set of readings available every ~ 7.5kHz
+  C2M::ADC::Scan_DMA();
 
   // Pin changes are tracked in separate ISRs, so depending on prio it might
   // need extra precautions.
@@ -76,7 +76,8 @@ void setup() {
   SERIAL_PRINTLN("* %s", C2M_VERSION);
 
   C2M::DigitalInputs::Init();
-  C2M::ADC::Init(&C2M::calibration_data.adc); 
+  C2M::ADC::Init(&C2M::calibration_data.adc);
+  C2M::ADC::Init_DMA();
   C2M::LEDs::Init(); 
   C2M::ui.Init();
   calibration_load();
