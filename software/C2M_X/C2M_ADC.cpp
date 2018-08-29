@@ -79,6 +79,8 @@ template <> struct ChannelDesc<ADC_CHANNEL_5_2> {
   const uint16_t value = adc_.readSingle(ADC_0);
 
   size_t channel = scan_channel_;
+
+  // todo. basically, the 2_x inputs aren't as critical, so deal with them elsewhere / in some other fashion
   
   switch (channel) {
     case ADC_CHANNEL_1_1:
