@@ -11,9 +11,9 @@ namespace C2M {
 /*static*/ uint32_t ADC::smoothed_[ADC_CHANNEL_LAST];
 /*static*/ volatile bool ADC::ready_;
 
-constexpr uint16_t ADC::SCA_CHANNEL_NUM[DMA_NUM_CH];
-DMAChannel* dma0 = new DMAChannel(false);
-DMAChannel* dma1 = new DMAChannel(false);
+constexpr uint16_t ADC::SCA_CHANNEL_ID[DMA_NUM_CH]; // ADCx_SCA register channel numbers
+DMAChannel* dma0 = new DMAChannel(false); // dma0 channel, fills adcbuffer_0
+DMAChannel* dma1 = new DMAChannel(false); // dma1 channel, updates ADC0_SC1A which holds the channel/pin IDs
 DMAMEM static volatile uint16_t __attribute__((aligned(DMA_BUF_SIZE+0))) adcbuffer_0[DMA_BUF_SIZE];
   
 /*static*/ void ADC::Init(CalibrationData *calibration_data) {
@@ -42,7 +42,7 @@ void ADC::DMA_ISR() {
 /*
  * 
  * DMA/ADC à la https://forum.pjrc.com/threads/30171-Reconfigure-ADC-via-a-DMA-transfer-to-allow-multiple-Channel-Acquisition
- * basically, this sets up two DMA channels and cycles through the 10 (effectively: 16) adc channels once (until the buffer is full), resets, and so on; dma1 advances SCA_CHANNEL_NUM
+ * basically, this sets up two DMA channels and cycles through the 10 (effectively: 16) adc channels once (until the buffer is full), resets, and so on; dma1 advances SCA_CHANNEL_ID
  * somewhat like https://www.nxp.com/docs/en/application-note/AN4590.pdf but w/o the PDB.
  * 
 */
@@ -66,7 +66,7 @@ void ADC::Init_DMA() {
   dma0->attachInterrupt(DMA_ISR);
 
   dma1->begin(true); // allocate the DMA channel 
-  dma1->TCD->SADDR = &ADC::SCA_CHANNEL_NUM[0];
+  dma1->TCD->SADDR = &ADC::SCA_CHANNEL_ID[0];
   dma1->TCD->SOFF = 2; // source increment each transfer (n bytes)
   dma1->TCD->ATTR = 0x101;
   dma1->TCD->SLAST = - DMA_NUM_CH*2; // num ADC0 samples * 2
@@ -88,12 +88,16 @@ void ADC::Init_DMA() {
   if (ADC::ready_) 
   {  
     ADC::ready_ = false;
-    /* starts at adcbuffer_0[1] because of weird offset; because there's 16 samples in the buffer, 11-15 are the pitch inputs again: */
+    /* 
+     *  starts collecting results at adcbuffer_0[1] because of weird offset (--> discard adcbuffer_0[0]). 
+     *  there's 16 samples in the buffer, 1-5 / 11-15 are the pitch inputs: 
+    */
     update<ADC_CHANNEL_1_1>((adcbuffer_0[1] + adcbuffer_0[11])/2); 
     update<ADC_CHANNEL_2_1>((adcbuffer_0[2] + adcbuffer_0[12])/2); 
     update<ADC_CHANNEL_3_1>((adcbuffer_0[3] + adcbuffer_0[13])/2); 
     update<ADC_CHANNEL_4_1>((adcbuffer_0[4] + adcbuffer_0[14])/2); 
-    update<ADC_CHANNEL_5_1>((adcbuffer_0[5] + adcbuffer_0[15])/2); 
+    update<ADC_CHANNEL_5_1>((adcbuffer_0[5] + adcbuffer_0[15])/2);
+    /*  6-10 are the velocity inputs: */
     update<ADC_CHANNEL_1_2>(adcbuffer_0[6]);
     update<ADC_CHANNEL_2_2>(adcbuffer_0[7]);
     update<ADC_CHANNEL_3_2>(adcbuffer_0[8]);

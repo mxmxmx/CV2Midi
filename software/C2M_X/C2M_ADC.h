@@ -23,7 +23,7 @@ enum ADC_CHANNEL {
 };
 
 #define DMA_BUF_SIZE 16
-#define DMA_NUM_CH 16 // 16 because we need some power of 2 (see SCA_CHANNEL_NUM[] below)
+#define DMA_NUM_CH 16 // 16 because we need some power of 2 (see SCA_CHANNEL_ID[] below)
 
 namespace C2M {
 
@@ -100,13 +100,12 @@ private:
   static uint32_t smoothed_[ADC_CHANNEL_LAST];
   
   /*  
-   *   below: channel ids for the ADCx_SCA register: we have 10 inputs, which isn't ideal ... so we pad the array 
-   *   (and start at 0x4C because of weird offset.)
+   *   below: channel ids for the ADCx_SCA register: we have 10 inputs, which isn't ideal ... so we pad the array
    *   pitch inputs 1-5: A5 = 0x4C; A4 = 0x4D; A3 = 0x49; A2 = 0x48; A0 = 0x45 
    *   velocity inputs 1-5: A9 = 0x44; A8 = 0x4F; A7 = 0x47; A6 = 0x46; A1 = 0x4E
   */
   
-  static constexpr uint16_t SCA_CHANNEL_NUM[] = { 0x4C, 0x4D, 0x49, 0x48, 0x45, 0x44, 0x4F, 0x47, 0x46, 0x4E, 0x4C, 0x4D, 0x49, 0x48, 0x45, 0x44 }; 
+  static constexpr uint16_t SCA_CHANNEL_ID[DMA_NUM_CH] = { 0x4C, 0x4D, 0x49, 0x48, 0x45, 0x44, 0x4F, 0x47, 0x46, 0x4E, 0x4C, 0x4D, 0x49, 0x48, 0x45, 0x44 }; 
 };
 
 };
