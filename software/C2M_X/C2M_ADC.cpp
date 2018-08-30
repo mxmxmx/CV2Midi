@@ -1,51 +1,21 @@
 #include "C2M_ADC.h"
 #include "C2M_gpio.h"
-
+#include "DMAChannel.h"
 #include <algorithm>
 
 namespace C2M {
 
-template <ADC_CHANNEL> struct ChannelDesc { };
-template <> struct ChannelDesc<ADC_CHANNEL_1_1> {
-  static const int PIN = CV1_1;
-};
-template <> struct ChannelDesc<ADC_CHANNEL_1_2> {
-  static const int PIN = CV1_2;
-};
-template <> struct ChannelDesc<ADC_CHANNEL_2_1> {
-  static const int PIN = CV2_1;
-};
-template <> struct ChannelDesc<ADC_CHANNEL_2_2> {
-  static const int PIN = CV2_2;
-};
-template <> struct ChannelDesc<ADC_CHANNEL_3_1> {
-  static const int PIN = CV3_1;
-};
-template <> struct ChannelDesc<ADC_CHANNEL_3_2> {
-  static const int PIN = CV3_2;
-};
-template <> struct ChannelDesc<ADC_CHANNEL_4_1> {
-  static const int PIN = CV4_1;
-};
-template <> struct ChannelDesc<ADC_CHANNEL_4_2> {
-  static const int PIN = CV4_2;
-};
-template <> struct ChannelDesc<ADC_CHANNEL_5_1> {
-  static const int PIN = CV5_1;
-};
-template <> struct ChannelDesc<ADC_CHANNEL_5_2> {
-  static const int PIN = CV5_2;
-};
-
 /*static*/ ::ADC ADC::adc_;
-/*static*/ size_t ADC::scan_channel_;
 /*static*/ ADC::CalibrationData *ADC::calibration_data_;
 /*static*/ uint32_t ADC::raw_[ADC_CHANNEL_LAST];
 /*static*/ uint32_t ADC::smoothed_[ADC_CHANNEL_LAST];
-#ifdef ENABLE_ADC_DEBUG
-/*static*/ volatile uint32_t ADC::busy_waits_;
-#endif
+/*static*/ volatile bool ADC::ready_;
 
+constexpr uint16_t ADC::SCA_CHANNEL_ID[DMA_NUM_CH]; // ADCx_SCA register channel numbers
+DMAChannel* dma0 = new DMAChannel(false); // dma0 channel, fills adcbuffer_0
+DMAChannel* dma1 = new DMAChannel(false); // dma1 channel, updates ADC0_SC1A which holds the channel/pin IDs
+DMAMEM static volatile uint16_t __attribute__((aligned(DMA_BUF_SIZE+0))) adcbuffer_0[DMA_BUF_SIZE];
+  
 /*static*/ void ADC::Init(CalibrationData *calibration_data) {
 
   adc_.setReference(ADC_REF_3V3);
@@ -53,97 +23,87 @@ template <> struct ChannelDesc<ADC_CHANNEL_5_2> {
   adc_.setConversionSpeed(kAdcConversionSpeed);
   adc_.setSamplingSpeed(kAdcSamplingSpeed);
   adc_.setAveraging(kAdcScanAverages);
-  adc_.disableDMA();
-  adc_.disableInterrupts();
-  adc_.disableCompare();
-
-  scan_channel_ = ADC_CHANNEL_1_1;
-  adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_1_1>::PIN);
-
+  adc_.enableDMA();
+  
   calibration_data_ = calibration_data;
   std::fill(raw_, raw_ + ADC_CHANNEL_LAST, 0);
   std::fill(smoothed_, smoothed_ + ADC_CHANNEL_LAST, 0);
-#ifdef ENABLE_ADC_DEBUG
-  busy_waits_ = 0;
-#endif
 }
 
-/*static*/ void FASTRUN ADC::Scan() {
+void ADC::DMA_ISR() {
 
-#ifdef ENABLE_ADC_DEBUG
-  if (!adc_.isComplete(ADC_0)) {
-    ++busy_waits_;
-    while (!adc_.isComplete(ADC_0));
-  }
-#endif
-  const uint16_t value = adc_.readSingle(ADC_0);
+  ADC::ready_ = true;
+  dma0->TCD->DADDR = &adcbuffer_0[0];
+  dma0->clearInterrupt();
+  // move enable to SCAN_DMA() ?
+  dma0->enable();
+}
 
-  size_t channel = scan_channel_;
+/*
+ * 
+ * DMA/ADC à la https://forum.pjrc.com/threads/30171-Reconfigure-ADC-via-a-DMA-transfer-to-allow-multiple-Channel-Acquisition
+ * basically, this sets up two DMA channels and cycles through the 10 (effectively: 16) adc channels once (until the buffer is full), resets, and so on; dma1 advances SCA_CHANNEL_ID
+ * somewhat like https://www.nxp.com/docs/en/application-note/AN4590.pdf but w/o the PDB.
+ * 
+*/
 
-  // todo. basically, the 2_x inputs aren't as critical, so deal with them elsewhere / in some other fashion
+void ADC::Init_DMA() {
   
-  switch (channel) {
-    case ADC_CHANNEL_1_1:
-      adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_2_1>::PIN, ADC_0);
-      update<ADC_CHANNEL_1_1>(value);
-      ++channel; 
-      break;
+  dma0->begin(true); // allocate the DMA channel 
+  dma0->TCD->SADDR = &ADC0_RA; 
+  dma0->TCD->SOFF = 0;
+  dma0->TCD->ATTR = 0x101;
+  dma0->TCD->NBYTES = 2;
+  dma0->TCD->SLAST = 0;
+  dma0->TCD->DADDR = &adcbuffer_0[0];
+  dma0->TCD->DOFF = 2; 
+  dma0->TCD->DLASTSGA = -(2 * DMA_BUF_SIZE);
+  dma0->TCD->BITER = DMA_BUF_SIZE;
+  dma0->TCD->CITER = DMA_BUF_SIZE; 
+  dma0->triggerAtHardwareEvent(DMAMUX_SOURCE_ADC0);
+  dma0->disableOnCompletion();
+  dma0->interruptAtCompletion();
+  dma0->attachInterrupt(DMA_ISR);
 
-    case ADC_CHANNEL_2_1:
-      adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_3_1>::PIN, ADC_0);
-      update<ADC_CHANNEL_2_1>(value);
-      ++channel; 
-      break;
+  dma1->begin(true); // allocate the DMA channel 
+  dma1->TCD->SADDR = &ADC::SCA_CHANNEL_ID[0];
+  dma1->TCD->SOFF = 2; // source increment each transfer (n bytes)
+  dma1->TCD->ATTR = 0x101;
+  dma1->TCD->SLAST = - DMA_NUM_CH*2; // num ADC0 samples * 2
+  dma1->TCD->BITER = DMA_NUM_CH;
+  dma1->TCD->CITER = DMA_NUM_CH;
+  dma1->TCD->DADDR = &ADC0_SC1A;
+  dma1->TCD->DLASTSGA = 0;
+  dma1->TCD->NBYTES = 2;
+  dma1->TCD->DOFF = 0;
+  dma1->triggerAtTransfersOf(*dma0);
+  dma1->triggerAtCompletionOf(*dma0);
 
-    case ADC_CHANNEL_3_1:
-      adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_4_1>::PIN, ADC_0);
-      update<ADC_CHANNEL_3_1>(value);
-      ++channel; 
-      break;
+  dma0->enable();
+  dma1->enable();
+} 
 
-    case ADC_CHANNEL_4_1:
-      adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_5_1>::PIN, ADC_0);
-      update<ADC_CHANNEL_4_1>(value);
-      ++channel; 
-      break;
+/*static*/void FASTRUN ADC::Scan_DMA() {
 
-    case ADC_CHANNEL_5_1:
-      adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_1_2>::PIN, ADC_0);
-      update<ADC_CHANNEL_5_1>(value);
-      ++channel; 
-      break;
-
-    case ADC_CHANNEL_1_2:
-      adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_2_2>::PIN, ADC_0);
-      update<ADC_CHANNEL_1_2>(value);
-      ++channel; 
-      break;
-
-    case ADC_CHANNEL_2_2:
-      adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_3_2>::PIN, ADC_0);
-      update<ADC_CHANNEL_2_2>(value);
-      ++channel; 
-      break;
-
-    case ADC_CHANNEL_3_2:
-      adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_4_2>::PIN, ADC_0);
-      update<ADC_CHANNEL_3_2>(value);
-      ++channel; 
-      break;
-
-   case ADC_CHANNEL_4_2:
-      adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_5_2>::PIN, ADC_0);
-      update<ADC_CHANNEL_4_2>(value);
-      ++channel; 
-      break;
-
-    case ADC_CHANNEL_5_2:
-      adc_.startSingleRead(ChannelDesc<ADC_CHANNEL_1_1>::PIN, ADC_0);
-      update<ADC_CHANNEL_5_2>(value);
-      channel = ADC_CHANNEL_1_1;
-      break;
+  if (ADC::ready_) 
+  {  
+    ADC::ready_ = false;
+    /* 
+     *  starts collecting results at adcbuffer_0[1] because of weird offset (--> discard adcbuffer_0[0]). 
+     *  there's 16 samples in the buffer, 1-5 / 11-15 are the pitch inputs: 
+    */
+    update<ADC_CHANNEL_1_1>((adcbuffer_0[1] + adcbuffer_0[11])/2); 
+    update<ADC_CHANNEL_2_1>((adcbuffer_0[2] + adcbuffer_0[12])/2); 
+    update<ADC_CHANNEL_3_1>((adcbuffer_0[3] + adcbuffer_0[13])/2); 
+    update<ADC_CHANNEL_4_1>((adcbuffer_0[4] + adcbuffer_0[14])/2); 
+    update<ADC_CHANNEL_5_1>((adcbuffer_0[5] + adcbuffer_0[15])/2);
+    /*  6-10 are the velocity inputs: */
+    update<ADC_CHANNEL_1_2>(adcbuffer_0[6]);
+    update<ADC_CHANNEL_2_2>(adcbuffer_0[7]);
+    update<ADC_CHANNEL_3_2>(adcbuffer_0[8]);
+    update<ADC_CHANNEL_4_2>(adcbuffer_0[9]);
+    update<ADC_CHANNEL_5_2>(adcbuffer_0[10]);
   }
-  scan_channel_ = channel;
 }
 
 /*static*/ void ADC::CalibratePitch(int32_t c2, int32_t c4) {

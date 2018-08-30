@@ -1,14 +1,11 @@
 #ifndef C2M_ADC_H_
 #define C2M_ADC_H_
 
-#include <Arduino.h>
 #include "src/drivers/ADC/C2M_util_ADC.h"
 #include "C2M_config.h"
 
 #include <stdint.h>
 #include <string.h>
-
-//#define ENABLE_ADC_DEBUG
 
 enum ADC_CHANNEL {
   ADC_CHANNEL_1_1,
@@ -25,6 +22,9 @@ enum ADC_CHANNEL {
   ADC_CHANNEL_NUM = ADC_CHANNEL_1_2
 };
 
+#define DMA_BUF_SIZE 16
+#define DMA_NUM_CH 16 // 16 because we need some power of 2 (see SCA_CHANNEL_ID[] below)
+
 namespace C2M {
 
 class ADC {
@@ -35,15 +35,12 @@ public:
   static constexpr uint32_t kAdcSmoothBits = 8; // fractional bits for smoothing
   static constexpr uint16_t kDefaultPitchCVScale = SEMITONES << 7;
 
-  // These values should be tweaked so startSingleRead/readSingle run in main ISR update time
   // 16 bit has best-case 13 bits useable, but we only want 12 so we discard 4 anyway
   static constexpr uint8_t kAdcScanResolution = 16;
-  static constexpr uint8_t kAdcScanAverages = 32;
+  static constexpr uint8_t kAdcScanAverages = 4; // ... doesn't like to be increased
   static constexpr uint8_t kAdcSamplingSpeed = ADC_HIGH_SPEED_16BITS;
   static constexpr uint8_t kAdcConversionSpeed = ADC_HIGH_SPEED;
-
   static constexpr uint32_t kAdcValueShift = kAdcSmoothBits;
-
 
   struct CalibrationData {
     
@@ -52,10 +49,9 @@ public:
   };
 
   static void Init(CalibrationData *calibration_data);
-
-  // Read the value of the last conversion and update current channel, then
-  // start the next conversion. 
-  static void Scan();
+  static void Init_DMA();
+  static void DMA_ISR();
+  static void Scan_DMA();
 
   template <ADC_CHANNEL channel>
   static int32_t value() {
@@ -82,22 +78,7 @@ public:
     int32_t value = calibration_data_->offset[channel] - raw_value(channel);
     return (value * calibration_data_->pitch_cv_scale) >> 12;
   }
-
-#ifdef ENABLE_ADC_DEBUG
-  // DEBUG
-  static uint16_t fail_flag0() {
-    return adc_.adc0->fail_flag;
-  }
-
-  static uint16_t fail_flag1() {
-    return adc_.adc1->fail_flag;
-  }
-
-  static uint32_t busy_waits() {
-    return busy_waits_;
-  }
-#endif
-
+  
   static void CalibratePitch(int32_t c2, int32_t c4);
 
 private:
@@ -112,15 +93,19 @@ private:
   }
 
   static ::ADC adc_;
-  static size_t scan_channel_;
+  static volatile bool ready_;
   static CalibrationData *calibration_data_;
-
+  
   static uint32_t raw_[ADC_CHANNEL_LAST];
   static uint32_t smoothed_[ADC_CHANNEL_LAST];
-
-#ifdef ENABLE_ADC_DEBUG
-  static volatile uint32_t busy_waits_;
-#endif
+  
+  /*  
+   *   below: channel ids for the ADCx_SCA register: we have 10 inputs, which isn't ideal ... so we pad the array
+   *   pitch inputs 1-5: A5 = 0x4C; A4 = 0x4D; A3 = 0x49; A2 = 0x48; A0 = 0x45 
+   *   velocity inputs 1-5: A9 = 0x44; A8 = 0x4F; A7 = 0x47; A6 = 0x46; A1 = 0x4E
+  */
+  
+  static constexpr uint16_t SCA_CHANNEL_ID[DMA_NUM_CH] = { 0x4C, 0x4D, 0x49, 0x48, 0x45, 0x44, 0x4F, 0x47, 0x46, 0x4E, 0x4C, 0x4D, 0x49, 0x48, 0x45, 0x44 }; 
 };
 
 };

@@ -236,7 +236,7 @@ SETTINGS_DECLARE(CV2MIDI, CV2MIDI_SETTING_LAST) {
   { 60, 0, 127, "default velocity", NULL, settings::STORAGE_TYPE_U8 }, // used when sending CC or aftertouch
   { 0x90, 0x0, 0xFF, "message type", NULL, settings::STORAGE_TYPE_U8 },
   { 0, 0, 127, "cc number", NULL, settings::STORAGE_TYPE_U8 },
-  { 0, 0, NUM_CHANNELS, "trigger delay", NULL, settings::STORAGE_TYPE_U4 } 
+  { 2, 0, NUM_CHANNELS, "trigger delay", NULL, settings::STORAGE_TYPE_U4 } 
 };
 
 class C2M_CHANNEL {
