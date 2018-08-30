@@ -23,11 +23,13 @@ DMAMEM static volatile uint16_t __attribute__((aligned(DMA_BUF_SIZE+0))) adcbuff
   adc_.setConversionSpeed(kAdcConversionSpeed);
   adc_.setSamplingSpeed(kAdcSamplingSpeed);
   adc_.setAveraging(kAdcScanAverages);
-  adc_.enableDMA();
   
   calibration_data_ = calibration_data;
   std::fill(raw_, raw_ + ADC_CHANNEL_LAST, 0);
   std::fill(smoothed_, smoothed_ + ADC_CHANNEL_LAST, 0);
+  std::fill(adcbuffer_0, adcbuffer_0 + DMA_BUF_SIZE, 0);
+  
+  adc_.enableDMA();
 }
 
 void ADC::DMA_ISR() {
@@ -35,8 +37,7 @@ void ADC::DMA_ISR() {
   ADC::ready_ = true;
   dma0->TCD->DADDR = &adcbuffer_0[0];
   dma0->clearInterrupt();
-  // move enable to SCAN_DMA() ?
-  dma0->enable();
+  /* reenable in SCAN_DMA(); */
 }
 
 /*
@@ -88,6 +89,7 @@ void ADC::Init_DMA() {
   if (ADC::ready_) 
   {  
     ADC::ready_ = false;
+    
     /* 
      *  starts collecting results at adcbuffer_0[1] because of weird offset (--> discard adcbuffer_0[0]). 
      *  there's 16 samples in the buffer, 1-5 / 11-15 are the pitch inputs: 
@@ -103,6 +105,8 @@ void ADC::Init_DMA() {
     update<ADC_CHANNEL_3_2>(adcbuffer_0[8]);
     update<ADC_CHANNEL_4_2>(adcbuffer_0[9]);
     update<ADC_CHANNEL_5_2>(adcbuffer_0[10]);
+    /* start over */
+    dma0->enable();
   }
 }
 
