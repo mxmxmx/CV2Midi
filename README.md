@@ -21,3 +21,5 @@
 - 15kHz update rate
 - teensy 3.2 based
 - 10HP, depth ~ 35mm
+
+[PCBs/panels](https://pushermanproductions.com/?s=cv2midi)
