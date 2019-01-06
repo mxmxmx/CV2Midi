@@ -49,6 +49,7 @@ MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
 const int32_t CM_SCALE = 71000; // scale factor --> velocity (~ x 1.05)
 const int32_t NUM_CHANNELS = 5;
 const int32_t DOUBLE_CLICK_TICKS = 3000;
+const uint8_t trigger_delay_ticks[NUM_CHANNELS + 0x1] = { 0, 4, 8, 12, 16, 24 };
 
 class CV2MIDI : public settings::SettingsBase<CV2MIDI, CV2MIDI_SETTING_LAST> {
 public:
@@ -142,8 +143,7 @@ public:
     trigger_delay_.Update();
     
     if (_triggered) {
-      // to do: use array with more evenly spaced values
-      trigger_delay_.Push(get_trigger_delay() << 0x4);
+      trigger_delay_.Push(trigger_delay_ticks[get_trigger_delay()]);
     }
     _triggered = trigger_delay_.triggered();
     
