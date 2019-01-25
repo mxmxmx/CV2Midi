@@ -22,6 +22,10 @@
 - teensy 3.2 based
 - 10HP, depth ~ 35mm
 
+### more info:
+
+- [docs](https://github.com/mxmxmx/CV2Midi/wiki)
+
 ### DIY: 
 
 - [PCBs/panels](https://pushermanproductions.com/?s=cv2midi)
