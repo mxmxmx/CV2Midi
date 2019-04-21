@@ -29,6 +29,9 @@
 #include "channel_message_quantizer.h"
 #include "extern/dspinst.h"
 
+/* set default note number : */
+#define DEFAULT_NOTE_NUM 60
+
 enum CV2MIDISettings {
   CV2MIDI_SETTING_MIDI_CHANNEL,
   CV2MIDI_SETTING_DEFAULT_PITCH,
@@ -48,7 +51,7 @@ enum ControlBitMask {
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
 const int32_t CM_SCALE = 71000; // scale factor --> velocity (~ x 1.05)
 const int32_t NUM_CHANNELS = 5;
-const int32_t DOUBLE_CLICK_TICKS = 3000;
+const int32_t DOUBLE_CLICK_TICKS = 2500;
 const uint8_t trigger_delay_ticks[NUM_CHANNELS + 0x1] = { 0, 4, 8, 12, 16, 24 };
 
 class CV2MIDI : public settings::SettingsBase<CV2MIDI, CV2MIDI_SETTING_LAST> {
@@ -185,12 +188,15 @@ public:
         digitalWriteFast(C2M::LEDs::LED_num[channel_id_], HIGH);
       }
     }
-    else if ((_gate_state == CONTROL_GATE_FALLING) && (active_note_ >= 0)) {
+    
+    /* note off: once gate goes low, or is low ... */
+    else if (((_gate_state == CONTROL_GATE_FALLING) || !_gate_raised) && (active_note_ >= 0)) {
       MIDI.sendNoteOn(active_note_, 0x0, get_midi_channel());
-      /* alternative would be to use sendNoteOff ... could make this a setting, but there's no ui left really ? */
+      /* alternative would be to use sendNoteOff ... */
       /* MIDI.sendNoteOff(active_note_, 0x0, _midi_channel);               */
       digitalWriteFast(C2M::LEDs::LED_num[channel_id_], LOW);
       active_note_ = -0xFF;
+      gate_raised_ = false;
     }
   }
 
@@ -232,8 +238,8 @@ void CV2MIDI::Init(C2M::DigitalInput default_trigger) {
   
 SETTINGS_DECLARE(CV2MIDI, CV2MIDI_SETTING_LAST) {
   { 0x0, 0x0, 0xF, "midi ch ", NULL, settings::STORAGE_TYPE_U4 },
-  { 60, 0, 127, "default pitch", NULL, settings::STORAGE_TYPE_U8 },
-  { 60, 0, 127, "default velocity", NULL, settings::STORAGE_TYPE_U8 }, // used when sending CC or aftertouch
+  { DEFAULT_NOTE_NUM, 0, 127, "default pitch", NULL, settings::STORAGE_TYPE_U8 },
+  { DEFAULT_NOTE_NUM, 0, 127, "default velocity", NULL, settings::STORAGE_TYPE_U8 }, // used when sending CC or aftertouch
   { 0x90, 0x0, 0xFF, "message type", NULL, settings::STORAGE_TYPE_U8 },
   { 0, 0, 127, "cc number", NULL, settings::STORAGE_TYPE_U8 },
   { 2, 0, NUM_CHANNELS, "trigger delay", NULL, settings::STORAGE_TYPE_U4 } 
@@ -254,6 +260,7 @@ public:
     ui.arm = false;
     ui.save = false;
     ui.ticks = 0x0;
+    ui.rx_status = 0x0;
     ui.pressed = 0x0;
     MIDI.begin(MIDI_CHANNEL_OMNI);
   }
@@ -263,7 +270,8 @@ public:
   void reInit() { 
     for (int i = 0; i < NUM_CHANNELS; i++) 
     {
-      c2m_[i].set_midi_channel(0x1 + i); 
+      c2m_[i].set_midi_channel(0x1 + i);
+      c2m_[i].set_default_pitch(DEFAULT_NOTE_NUM);
       c2m_[i].set_trigger_delay(0x0); 
     }
   }
@@ -321,61 +329,70 @@ public:
       else 
         ui.ticks = 0x0;
 
-      // and listen to incoming midi data:
-      if (MIDI.read()) {
-        
-        switch(MIDI.getType()) {
+      /* and listen to incoming midi data: */
+      
+      if (Serial1.available() > 0) {
 
-          case midi::NoteOn:
+        uint8_t incomingByte = Serial1.read();
+        uint8_t statusByte = incomingByte & 0xF0;
+        
+        switch(statusByte) {
+
+          case 0x90: // note on
           {
-            // set default pitch + midi channel
-            c2m_[channel].set_midi_channel(MIDI.getChannel());
-            c2m_[channel].set_default_pitch(MIDI.getData1());
-            SERIAL_PRINTLN("received: channel %d, note on: %d", c2m_[channel].get_midi_channel(), c2m_[channel].get_default_pitch());
-            ui.save = true;
+            uint8_t chan_num = incomingByte & 0xF;
+            uint8_t note_num = Serial1.read();
+            uint8_t velocity = Serial1.read();
+            
+            /* set default pitch + midi channel, if velocity > 0 */
+            if (velocity) {
+
+              c2m_[channel].set_midi_channel(chan_num);
+              c2m_[channel].set_channel_message(0x90); // set status
+              c2m_[channel].set_default_pitch(note_num);
+              SERIAL_PRINTLN("received: channel %d, note on: %d", c2m_[channel].get_midi_channel(), c2m_[channel].get_default_pitch());
+              ui.save = true;
+              ui.rx_status = millis();
+              digitalWriteFast(LEDX, LOW);
+            }
+       
+            /* echo the note */
+            Serial1.write(incomingByte); Serial1.write(note_num); Serial1.write(velocity);
           }
           break;
-          case midi::ControlChange:
+          
+          case 0xB0: // control change
           {
-            c2m_[channel].set_midi_channel(MIDI.getChannel());
-            c2m_[channel].set_channel_message(0xB0); // set status
-            c2m_[channel].set_cc_number(MIDI.getData1()); // set CC number
-            // set default velocity via pot
+
+            uint8_t cc_num = Serial1.read();
+            uint8_t cc_val = Serial1.read();
+            
+            /* set channel, status, and cc number: */
+            c2m_[channel].set_midi_channel(incomingByte & 0xF);
+            c2m_[channel].set_channel_message(0xB0);
+            c2m_[channel].set_cc_number(cc_num);
+            
+            /* set default velocity via pot */
             int32_t velocity = c2m_[channel].Scale127(C2M::ADC::pitch_value(static_cast<ADC_CHANNEL>(channel + ADC_CHANNEL_NUM)));
             c2m_[channel].set_default_velocity(velocity);
-            SERIAL_PRINTLN("received: channel %d, CC: %d / %d", c2m_[channel].get_midi_channel(), c2m_[channel].get_cc_number(),  MIDI.getData2());
+            SERIAL_PRINTLN("received: channel %d, CC: %d / %d", c2m_[channel].get_midi_channel(), c2m_[channel].get_cc_number(),  cc_val);
             ui.save = true;
+            ui.rx_status = millis();
+            digitalWriteFast(LEDX, LOW);
+            /* echo the note */
+            Serial1.write(incomingByte); Serial1.write(cc_num); Serial1.write(cc_val);
           }
           break;
-          /*
-          case midi::AfterTouchChannel:
-          {
-          c2m_[channel].set_midi_channel(MIDI.getChannel());
-          c2m_[channel].set_channel_message(0xA0);
-          // set velocity via pot
-          int32_t velocity = C2M::ADC::pitch_value(static_cast<ADC_CHANNEL>(channel + ADC_CHANNEL_NUM));
-          // scale to 0-127
-          velocity = c2m_[channel].Scale127(velocity);
-          c2m_[channel].set_default_velocity(velocity);
-          SERIAL_PRINTLN("received: channel %d, aftertouch: %d / %d", c2m_[channel].get_midi_channel(), MIDI.getData1(),  MIDI.getData2());
-          ui.save = true;
-          }
-          break;
-          */
-          /*
-          // add ? ... could just send the MSB, or not scale to 127
-          case midi::PitchBend:
-          c2m_[channel].set_midi_channel(MIDI.getChannel());
-          c2m_[channel].set_channel_message(0xE0);
-          SERIAL_PRINTLN("received: channel %d, pitchbend: %d / %d", c2m_[channel].get_midi_channel(), MIDI.getData1(), MIDI.getData2());
-          ui.save = true;
-          break;
-          */
-          /* to do ... dump channel configurations into module w/ sysex ? */
+          //
           default:
-          SERIAL_PRINTLN("(ignored): channel %d, type: %d", MIDI.getChannel(), MIDI.getType());
+          //SERIAL_PRINTLN("(ignored): channel %d, type: %d", MIDI.getChannel(), MIDI.getType());
           break;
-        } 
+        }
+      }
+      /* RX feedback ... */
+      if (ui.rx_status && (millis() - ui.rx_status > 250)) {
+        digitalWriteFast(LEDX, HIGH);
+        ui.rx_status = 0x0;
       }
     }
   }
@@ -395,6 +412,7 @@ public:
     int8_t selected_channel;
     int8_t trigger_settings;
     uint32_t ticks;
+    uint32_t rx_status;
     bool arm;
     bool save;
     bool pressed;

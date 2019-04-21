@@ -160,11 +160,16 @@ void C2M::Ui::Calibrate() {
         C2M::LEDs::on_up_to(1); 
         break;
         case ADC_PITCH_C2:
+        // measure input @1V and move to 3v step
+        calibration_state.adc_1v = adc_average(ADC_CHANNEL_1_1);
         // turn on 3 LEDs --> 3V
         C2M::LEDs::on_up_to(3);
         break;
         case ADC_PITCH_C4:
-        {
+        { 
+          // measure input @3V and calc. 1v/oct
+          calibration_state.adc_3v = adc_average(ADC_CHANNEL_1_1);
+          
           if (calibration_state.adc_1v && calibration_state.adc_3v) {
             
             // using the raw values, ie C4 < C2 
@@ -172,6 +177,15 @@ void C2M::Ui::Calibrate() {
             SERIAL_PRINTLN("ADC SCALE 1V=%d, 3V=%d -> %d",
                            calibration_state.adc_1v, calibration_state.adc_3v,
                            C2M::calibration_data.adc.pitch_cv_scale);
+          }
+          if (C2M::calibration_data.adc.pitch_cv_scale < 14500 || C2M::calibration_data.adc.pitch_cv_scale > 16000) {
+            // error ... to do: make nice so no reboot is necessary
+            while(true) {
+              digitalWriteFast(LEDX, HIGH);
+              delay(100);
+              digitalWriteFast(LEDX, LOW);
+              delay(100);
+            }
           }
           // lights off
           C2M::LEDs::off();
@@ -207,12 +221,6 @@ void C2M::Ui::Calibrate() {
           C2M::calibration_data.adc.offset[i + ADC_CHANNEL_NUM] = adc_average(static_cast<ADC_CHANNEL>(i + ADC_CHANNEL_NUM));
           digitalWriteFast(C2M::LEDs::LED_num[i], HIGH);
         } 
-        break;
-      case CALIBRATE_ADC_1V:
-        calibration_state.adc_1v = adc_average(ADC_CHANNEL_1_1);
-        break;
-      case CALIBRATE_ADC_3V:
-        calibration_state.adc_3v = adc_average(ADC_CHANNEL_1_1);
         break;
       default:
         break;
@@ -252,4 +260,3 @@ uint32_t adc_average(ADC_CHANNEL channel) {
   SERIAL_PRINTLN("average value (channel %d): %d ", channel, (int)(val >> 4));
   return val >> 4;
 }
-
