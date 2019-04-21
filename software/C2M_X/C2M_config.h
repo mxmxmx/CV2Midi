@@ -11,7 +11,7 @@ static constexpr uint32_t C2M_UI_TIMER_RATE   = 2000UL;
 
 // From kinetis.h
 // Cortex-M4: 0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240
-static constexpr int C2M_CORE_TIMER_PRIO = 96;  // yet higher
+static constexpr int C2M_CORE_TIMER_PRIO = 32;  // yet higher (NB: serial defaults to 48, so...)
 static constexpr int C2M_GPIO_ISR_PRIO   = 112; // higher
 static constexpr int C2M_UI_TIMER_PRIO   = 128; // default
 
