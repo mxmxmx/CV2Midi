@@ -30,6 +30,7 @@
 
 /* set default note number : */
 #define DEFAULT_NOTE_NUM 60
+#define TX_LIMIT_IN_TICKS 100 // 100 ticks ~= 6ms
 
 enum CV2MIDISettings {
   CV2MIDI_SETTING_MIDI_CHANNEL,
@@ -154,8 +155,11 @@ public:
       _gate_state |= CONTROL_GATE_FALLING;
     gate_raised_ = _gate_raised;
 
-    if (_triggered && (active_note_ < 0)) {
+    rate_limit_++;
+    
+    if (_triggered && (active_note_ < 0) && (rate_limit_ > TX_LIMIT_IN_TICKS)) {
 
+      rate_limit_ = 0x0;
       // make note value:
       int32_t sample = C2M::ADC::pitch_value(adc_channel);
       sample = (quantizer_.Process(sample) >> 7) + get_default_pitch();
@@ -204,6 +208,7 @@ int32_t Scale127(int32_t sample) {
 private:
   bool gate_raised_;
   uint8_t channel_id_;
+  uint16_t rate_limit_;
   int32_t active_note_;
   braids::Quantizer quantizer_;
   SemitoneQuantizer cm_quantizer_;
@@ -220,6 +225,7 @@ void CV2MIDI::Init(C2M::DigitalInput default_trigger) {
   if (C2M::apps::using_defaults) set_midi_channel(channel_id_ + 0x1);
   active_note_ = -0xFF;
   gate_raised_ = false;
+  rate_limit_ = 0x0;
   quantizer_.Init();
   cm_quantizer_.Init();
   quantizer_.Configure(braids::scales[0x1], 0xFFFF);

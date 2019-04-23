@@ -5,15 +5,15 @@
 
 namespace C2M {
 
-class MIDI {
+  class MIDI {
+    
+  public:
   
-public:
-
-  static void Init();
-  static int rx();
-  static void send_data(uint8_t statusByte, uint8_t param1, uint8_t param2);
- 
-};
+    static void Init();
+    static int rx();
+    static void send_data(uint8_t statusByte, uint8_t param1, uint8_t param2);
+   
+  };
 
 }; // namespace 2CM
 
