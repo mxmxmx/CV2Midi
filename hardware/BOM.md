@@ -1,6 +1,6 @@
 # BOM for cv | midi
 
-### resistors 0603:
+### resistors 0603 (1%):
 
 | value	| # | note |
 | ---	| ---: | --- |

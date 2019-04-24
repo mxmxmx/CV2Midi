@@ -32,15 +32,6 @@ public:
   static void on_up_to(uint8_t num);
   
   static constexpr uint8_t LED_num[LED_CHANNEL_LAST] = { LED1, LED2, LED3, LED4, LED5, LEDX };
-  
-  //template <LED_CHANNEL channel>
-  //static void set(uint32_t value) {
-  //  values_[channel] = USAT16(value);
-  //}
-
-  //static void set(LED_CHANNEL channel, uint32_t value) {
-  //  values_[channel] = USAT16(value);
-  //}
 
 private:
 static uint32_t ticks_;

@@ -24,6 +24,7 @@
 #include "C2M_apps.h"
 #include "C2M_core.h"
 #include "C2M_LED.h"
+#include "C2M_MIDI.h"
 #include "C2M_gpio.h"
 #include "C2M_ADC.h"
 #include "C2M_calibration.h"
@@ -78,7 +79,8 @@ void setup() {
   C2M::DigitalInputs::Init();
   C2M::ADC::Init(&C2M::calibration_data.adc);
   C2M::ADC::Init_DMA();
-  C2M::LEDs::Init(); 
+  C2M::LEDs::Init();
+  C2M::MIDI::Init(); 
   C2M::ui.Init();
   calibration_load();
 
