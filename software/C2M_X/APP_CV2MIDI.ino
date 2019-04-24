@@ -23,14 +23,15 @@
 #include "util/util_settings.h"
 #include "util/util_trigger_delay.h"
 #include "C2M_LED.h"
+#include "C2M_options.h"
 #include "braids_quantizer.h"
 #include "braids_quantizer_scales.h"
 #include "channel_message_quantizer.h"
 #include "extern/dspinst.h"
 
-/* set default note number : */
-#define DEFAULT_NOTE_NUM 60
+/* rate limit */
 #define TX_LIMIT_IN_TICKS 100 // 100 ticks ~= 6ms
+
 
 enum CV2MIDISettings {
   CV2MIDI_SETTING_MIDI_CHANNEL,
@@ -49,9 +50,12 @@ enum ControlBitMask {
 };
 
 const int32_t CM_SCALE = 71000; // scale factor --> velocity (~ x 1.05)
-const int32_t NUM_CHANNELS = 5;
+const uint8_t NUM_CHANNELS = 5;
 const int32_t DOUBLE_CLICK_TICKS = 2500;
 const uint8_t trigger_delay_ticks[NUM_CHANNELS + 0x1] = { 0, 4, 8, 12, 16, 24 };
+
+const uint8_t DEFAULT_NOTE_NUMBERS[NUM_CHANNELS] = { NOTE_NUMBER_1, NOTE_NUMBER_2, NOTE_NUMBER_3, NOTE_NUMBER_4, NOTE_NUMBER_5 };
+const uint8_t DEFAULT_MIDI_CHANNEL[NUM_CHANNELS] = { MIDI_CHANNEL_1, MIDI_CHANNEL_2, MIDI_CHANNEL_3, MIDI_CHANNEL_4, MIDI_CHANNEL_5 };
 
 class CV2MIDI : public settings::SettingsBase<CV2MIDI, CV2MIDI_SETTING_LAST> {
 public:
@@ -221,8 +225,11 @@ void CV2MIDI::Init(C2M::DigitalInput default_trigger) {
   
   InitDefaults();
   channel_id_ = static_cast<int8_t>(default_trigger);
-  // default to midi channels 1-5 ... only do this if defaults were not loaded in the first place:
-  if (C2M::apps::using_defaults) set_midi_channel(channel_id_ + 0x1);
+  /* load defaults from C2M_options.h ... only do this if defaults were not loaded in the first place: */
+  if (C2M::apps::using_defaults) { 
+    set_midi_channel(DEFAULT_MIDI_CHANNEL[channel_id_]);
+    set_default_pitch(DEFAULT_NOTE_NUMBERS[channel_id_]);
+  }
   active_note_ = -0xFF;
   gate_raised_ = false;
   rate_limit_ = 0x0;
@@ -235,8 +242,8 @@ void CV2MIDI::Init(C2M::DigitalInput default_trigger) {
   
 SETTINGS_DECLARE(CV2MIDI, CV2MIDI_SETTING_LAST) {
   { 0x0, 0x0, 0xF, "midi ch ", NULL, settings::STORAGE_TYPE_U4 },
-  { DEFAULT_NOTE_NUM, 0, 127, "default pitch", NULL, settings::STORAGE_TYPE_U8 },
-  { DEFAULT_NOTE_NUM, 0, 127, "default velocity", NULL, settings::STORAGE_TYPE_U8 }, // used when sending CC or aftertouch
+  { DEFAULT_NOTE_NUMBERS[0], 0, 127, "default pitch", NULL, settings::STORAGE_TYPE_U8 },
+  { DEFAULT_NOTE_NUMBERS[0], 0, 127, "default velocity", NULL, settings::STORAGE_TYPE_U8 }, // used when sending CC
   { 0x90, 0x0, 0xFF, "message type", NULL, settings::STORAGE_TYPE_U8 },
   { 0, 0, 127, "cc number", NULL, settings::STORAGE_TYPE_U8 },
   { 2, 0, NUM_CHANNELS, "trigger delay", NULL, settings::STORAGE_TYPE_U4 } 
@@ -266,9 +273,9 @@ public:
   void reInit() { 
     for (int i = 0; i < NUM_CHANNELS; i++) 
     {
-      c2m_[i].set_midi_channel(0x1 + i);
-      c2m_[i].set_default_pitch(DEFAULT_NOTE_NUM);
-      c2m_[i].set_trigger_delay(0x0); 
+      c2m_[i].set_midi_channel(DEFAULT_MIDI_CHANNEL[i]);
+      c2m_[i].set_default_pitch(DEFAULT_NOTE_NUMBERS[i]);
+      c2m_[i].set_trigger_delay(0x0);
     }
   }
   
